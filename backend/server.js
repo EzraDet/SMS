@@ -30,13 +30,44 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ==================== MIDDLEWARE ====================
+// ==================== CORS (flexible for dev + prod) ====================
+// Set FRONTEND_URL in .env for production.
+// Falls back to common localhost origins for development.
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+if (process.env.FRONTEND_URL) {
+  // FRONTEND_URL can be a single URL or a comma-separated list
+  process.env.FRONTEND_URL.split(',').forEach((url) => {
+    const trimmed = url.trim();
+    if (trimmed) allowedOrigins.push(trimmed);
+  });
+}
+
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Allow all vercel.app preview URLs
+      if (/\.vercel\.app$/.test(origin)) return callback(null, true);
+      // Allow all railway.app preview URLs
+      if (/\.railway\.app$/.test(origin)) return callback(null, true);
+      // Allow all onrender.com preview URLs
+      if (/\.onrender\.com$/.test(origin)) return callback(null, true);
+
+      console.warn(`⚠️  CORS blocked origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   })
 );
+
+// ==================== MIDDLEWARE ====================
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -54,6 +85,7 @@ app.get('/', (req, res) => {
       version: '1.0.0',
       status: 'running',
       timestamp: new Date().toISOString(),
+      env: process.env.NODE_ENV || 'development',
     },
     'Welcome to School Management API'
   );
@@ -76,7 +108,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ==================== API ROUTES (after middleware!) ====================
+// ==================== API ROUTES ====================
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/students', studentRoutes);
@@ -99,19 +131,8 @@ app.listen(PORT, () => {
   console.log('🎓  SCHOOL MANAGEMENT SYSTEM API');
   console.log('════════════════════════════════════════════════');
   console.log(`🚀  Server:         http://localhost:${PORT}`);
-  console.log(`📊  Health:         http://localhost:${PORT}/api/health`);
-  console.log(`🖼️  Uploads:        http://localhost:${PORT}/uploads`);
-  console.log(`🔐  Auth:           http://localhost:${PORT}/api/auth`);
-  console.log(`📈  Dashboard:      http://localhost:${PORT}/api/dashboard`);
-  console.log(`👥  Students:       http://localhost:${PORT}/api/students`);
-  console.log(`🧑‍🏫  Teachers:       http://localhost:${PORT}/api/teachers`);
-  console.log(`🏫  Classes:        http://localhost:${PORT}/api/classes`);
-  console.log(`📚  Subjects:       http://localhost:${PORT}/api/subjects`);
-  console.log(`📋  Attendance:     http://localhost:${PORT}/api/attendance`);
-  console.log(`📝  Scores:         http://localhost:${PORT}/api/scores`);
-  console.log(`📅  Academic Years: http://localhost:${PORT}/api/academic-years`);
-  console.log(`🔔  Notifications:  http://localhost:${PORT}/api/notifications`);
   console.log(`🌍  Env:            ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗  Allowed CORS:   ${allowedOrigins.join(', ')}`);
   console.log('════════════════════════════════════════════════');
   console.log('');
 });
